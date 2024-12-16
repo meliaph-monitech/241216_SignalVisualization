@@ -114,7 +114,8 @@ if uploaded_zip:
                         y=data["y"],
                         mode='lines',
                         hoverinfo='text',
-                        text=data["tooltip"]
+                        text=data["tooltip"],
+                        line=dict(width=0.5)
                     ))
                 fig.update_layout(
                     title=f"Visualization for Column {col_idx + 1}",
