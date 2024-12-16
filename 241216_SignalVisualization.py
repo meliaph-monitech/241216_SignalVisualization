@@ -31,13 +31,8 @@ if uploaded_zip:
         )
 
         if selected_files:
-            # Load and preview the first selected file
+            # Load the selected files
             dfs = {file: pd.read_csv(os.path.join(extract_dir, file)) for file in selected_files}
-
-            # Display a preview of the data
-            for file, df in dfs.items():
-                st.write(f"### Preview of {file}")
-                st.dataframe(df.head())
 
             # Step 2: Filter Column Selection
             st.write("### Filter Column Selection")
@@ -76,10 +71,10 @@ if uploaded_zip:
             bead_numbers = st.text_input("Enter Bead Numbers to Visualize (comma-separated, or leave blank for all):")
             bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
 
-            for file, df in dfs.items():
-                st.write(f"### Visualization for {file}")
+            # Plotting with Plotly
+            fig_columns = [go.Figure() for _ in range(3)]
 
-                # Subset Data for Selected Beads
+            for file, df in dfs.items():
                 bead_indices = bead_data[file]
                 start_points = bead_indices["start_points"]
                 end_points = bead_indices["end_points"]
@@ -89,29 +84,24 @@ if uploaded_zip:
                 else:
                     indices_to_plot = range(len(start_points))
 
-                # Plotting with Plotly
-                fig = go.Figure()
-                columns_to_plot = df.columns[:3]
-
-                for idx, column in enumerate(columns_to_plot):
+                for col_idx, column in enumerate(df.columns[:3]):
                     for i in indices_to_plot:
                         segment = df.iloc[start_points[i]:end_points[i] + 1]
-                        fig.add_trace(go.Scatter(
+                        fig_columns[col_idx].add_trace(go.Scatter(
                             x=segment.index,
                             y=segment[column],
                             mode='lines',
-                            name=f"{column} - Bead {i + 1}",
-                            legendgroup=f"{column}"
+                            hoverinfo='text',
+                            text=[f"File: {file}<br>Bead: {i + 1}" for _ in range(len(segment))],
                         ))
 
+            for col_idx, fig in enumerate(fig_columns):
                 fig.update_layout(
-                    title=f"Signal Visualization for {file}",
+                    title=f"Visualization for Column {col_idx + 1}",
                     xaxis_title="Row Number (Time-Series)",
                     yaxis_title="Signal Value",
-                    legend_title="Columns and Beads",
                     height=600
                 )
-
                 st.plotly_chart(fig)
 
             st.write("Visualization Complete!")
