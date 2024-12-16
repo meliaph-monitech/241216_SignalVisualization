@@ -5,6 +5,9 @@ import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
 
+# Set page layout to wide
+st.set_page_config(layout="wide")
+
 # Streamlit Title
 st.title("Laser Welding Signal Visualization")
 
