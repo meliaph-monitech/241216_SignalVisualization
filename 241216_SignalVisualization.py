@@ -1,9 +1,14 @@
+# Fifth
+
 import streamlit as st
 import zipfile
 import os
 import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
+
+# Set page layout to wide
+st.set_page_config(layout="wide")
 
 # Streamlit Title
 st.title("Laser Welding Signal Visualization")
@@ -85,9 +90,11 @@ if uploaded_zip:
                     indices_to_plot = range(len(start_points))
 
                 for col_idx, column in enumerate(df.columns[:3]):
+                    cumulative_index = 0
                     for i in indices_to_plot:
                         segment = df.iloc[start_points[i]:end_points[i] + 1]
-                        normalized_index = list(range(len(segment)))
+                        normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
+                        cumulative_index += len(segment)
                         normalized_data[col_idx].append({
                             "x": normalized_index,
                             "y": segment[column].values,
