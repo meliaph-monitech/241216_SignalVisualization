@@ -1,4 +1,4 @@
-#Sixth
+#Seventh
 
 import streamlit as st
 import zipfile
@@ -30,10 +30,14 @@ if uploaded_zip:
     if csv_files:
         st.success(f"Extracted {len(csv_files)} CSV files.")
 
-        # Display the list of CSV files
+        # Display the list of CSV files with an "All" option
+        all_files_option = ["All"] + csv_files
         selected_files = st.multiselect(
-            "Select CSV file(s) to visualize:", csv_files
+            "Select CSV file(s) to visualize:", all_files_option, default="All"
         )
+
+        if "All" in selected_files:
+            selected_files = csv_files  # Select all files if "All" is chosen
 
         if selected_files:
             # Load the selected files
