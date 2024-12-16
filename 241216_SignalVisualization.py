@@ -1,4 +1,4 @@
-# Fifth
+#Sixth
 
 import streamlit as st
 import zipfile
@@ -98,7 +98,10 @@ if uploaded_zip:
                         normalized_data[col_idx].append({
                             "x": normalized_index,
                             "y": segment[column].values,
-                            "tooltip": [f"File: {file}<br>Bead: {i + 1}" for _ in range(len(segment))]
+                            "tooltip": [
+                                f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
+                                for idx, val in zip(segment.index, segment[column].values)
+                            ]
                         })
 
             # Plotting with Plotly
@@ -111,14 +114,14 @@ if uploaded_zip:
                         y=data["y"],
                         mode='lines',
                         hoverinfo='text',
-                        text=data["tooltip"],
-                        line=dict(width=0.5)
+                        text=data["tooltip"]
                     ))
                 fig.update_layout(
                     title=f"Visualization for Column {col_idx + 1}",
                     xaxis_title="Normalized Index",
                     yaxis_title="Signal Value",
-                    height=600
+                    height=600,
+                    showlegend=False
                 )
                 st.plotly_chart(fig)
 
