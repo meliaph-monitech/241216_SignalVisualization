@@ -1,14 +1,9 @@
-# Third Attempt
-
 import streamlit as st
 import zipfile
 import os
 import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
-
-# Set page layout to wide
-st.set_page_config(layout="wide")
 
 # Streamlit Title
 st.title("Laser Welding Signal Visualization")
@@ -76,8 +71,8 @@ if uploaded_zip:
             bead_numbers = st.text_input("Enter Bead Numbers to Visualize (comma-separated, or leave blank for all):")
             bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
 
-            # Plotting with Plotly
-            fig_columns = [go.Figure() for _ in range(3)]
+            # Normalize Indices and Prepare Data for Plotting
+            normalized_data = {col_idx: [] for col_idx in range(3)}
 
             for file, df in dfs.items():
                 bead_indices = bead_data[file]
@@ -92,18 +87,28 @@ if uploaded_zip:
                 for col_idx, column in enumerate(df.columns[:3]):
                     for i in indices_to_plot:
                         segment = df.iloc[start_points[i]:end_points[i] + 1]
-                        fig_columns[col_idx].add_trace(go.Scatter(
-                            x=segment.index,
-                            y=segment[column],
-                            mode='lines',
-                            hoverinfo='text',
-                            text=[f"File: {file}<br>Bead: {i + 1}" for _ in range(len(segment))],
-                        ))
+                        normalized_index = list(range(len(segment)))
+                        normalized_data[col_idx].append({
+                            "x": normalized_index,
+                            "y": segment[column].values,
+                            "tooltip": [f"File: {file}<br>Bead: {i + 1}" for _ in range(len(segment))]
+                        })
+
+            # Plotting with Plotly
+            fig_columns = [go.Figure() for _ in range(3)]
 
             for col_idx, fig in enumerate(fig_columns):
+                for data in normalized_data[col_idx]:
+                    fig.add_trace(go.Scatter(
+                        x=data["x"],
+                        y=data["y"],
+                        mode='lines',
+                        hoverinfo='text',
+                        text=data["tooltip"]
+                    ))
                 fig.update_layout(
                     title=f"Visualization for Column {col_idx + 1}",
-                    xaxis_title="Row Number (Time-Series)",
+                    xaxis_title="Normalized Index",
                     yaxis_title="Signal Value",
                     height=600
                 )
