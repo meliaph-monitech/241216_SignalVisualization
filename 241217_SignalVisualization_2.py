@@ -1,5 +1,3 @@
-#Ninth
-
 import streamlit as st
 import zipfile
 import os
@@ -41,39 +39,43 @@ if uploaded_zip:
         # Set filter threshold
         filter_threshold = st.number_input("Set Filter Threshold:", value=1.0)
 
-        # Step 3: Visualize Button to Trigger Filtering
-        if st.button("Visualize"):
+        # Button to trigger filtering
+        filter_triggered = st.button("Visualize")
+        session_state = st.session_state
+
+        if filter_triggered or "filtered_files" in session_state:
             # Filter data across all files to reduce processing
             st.write("Filtering data...")
-            filtered_files = {}
+            if "filtered_files" not in session_state or filter_triggered:
+                session_state.filtered_files = {}
+                for file in csv_files:
+                    df = pd.read_csv(os.path.join(extract_dir, file))
+                    # Apply filtering based on threshold
+                    if (df[filter_column] > filter_threshold).any():
+                        session_state.filtered_files[file] = df
 
-            for file in csv_files:
-                df = pd.read_csv(os.path.join(extract_dir, file))
-                # Apply filtering based on threshold
-                if (df[filter_column] > filter_threshold).any():
-                    filtered_files[file] = df
+            st.success(f"Filtered down to {len(session_state.filtered_files)} files after applying the threshold.")
 
-            st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
-
-            # Step 4: File Selection Dropdown with 'All' Option
+            # Step 3: File Selection Dropdown with 'All' Option
             st.write("### Select CSV Files")
-            file_list = list(filtered_files.keys())
+            file_list = list(session_state.filtered_files.keys())
             selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
 
             if "All" in selected_files:
                 selected_files = file_list
 
             if selected_files:
-                # Step 5: Bead Segmentation Preparation
+                # Step 4: Bead Segmentation Preparation
                 st.write("### Bead Segmentation and Visualization")
                 bead_numbers = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
                 bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
 
                 # Normalize Indices and Prepare Data for Plotting
                 bead_data = {col_idx: [] for col_idx in range(3)}
+                file_colors = {file: f"rgb({(hash(file) % 256)},{(hash(file + 'g') % 256)},{(hash(file + 'b') % 256)})" for file in selected_files}
 
                 for file in selected_files:
-                    df = filtered_files[file]
+                    df = session_state.filtered_files[file]
                     filter_values = df[filter_column].to_numpy()
 
                     # Bead segmentation logic
@@ -107,7 +109,8 @@ if uploaded_zip:
                                 "tooltip": [
                                     f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
                                     for idx, val in zip(segment.index, segment[column].values)
-                                ]
+                                ],
+                                "color": file_colors[file]
                             })
 
                 # Plotting with Plotly
@@ -121,7 +124,7 @@ if uploaded_zip:
                             mode='lines',
                             hoverinfo='text',
                             text=data["tooltip"],
-                            line=dict(width=0.5)
+                            line=dict(color=data["color"], width=0.5)
                         ))
                     fig.update_layout(
                         title=f"Visualization for Column {col_idx + 1}",
