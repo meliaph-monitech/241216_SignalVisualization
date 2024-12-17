@@ -1,4 +1,4 @@
-#Eighth
+#Ninth
 
 import streamlit as st
 import zipfile
@@ -41,93 +41,95 @@ if uploaded_zip:
         # Set filter threshold
         filter_threshold = st.number_input("Set Filter Threshold:", value=1.0)
 
-        # Step 3: Filter data across all files to reduce processing
-        st.write("Filtering data...")
-        filtered_files = {}
+        # Step 3: Visualize Button to Trigger Filtering
+        if st.button("Visualize"):
+            # Filter data across all files to reduce processing
+            st.write("Filtering data...")
+            filtered_files = {}
 
-        for file in csv_files:
-            df = pd.read_csv(os.path.join(extract_dir, file))
-            # Apply filtering based on threshold
-            if (df[filter_column] > filter_threshold).any():
-                filtered_files[file] = df
+            for file in csv_files:
+                df = pd.read_csv(os.path.join(extract_dir, file))
+                # Apply filtering based on threshold
+                if (df[filter_column] > filter_threshold).any():
+                    filtered_files[file] = df
 
-        st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
+            st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
 
-        # Step 4: File Selection Dropdown with 'All' Option
-        st.write("### Select CSV Files")
-        file_list = list(filtered_files.keys())
-        selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
+            # Step 4: File Selection Dropdown with 'All' Option
+            st.write("### Select CSV Files")
+            file_list = list(filtered_files.keys())
+            selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
 
-        if "All" in selected_files:
-            selected_files = file_list
+            if "All" in selected_files:
+                selected_files = file_list
 
-        if selected_files:
-            # Step 5: Bead Segmentation Preparation
-            st.write("### Bead Segmentation and Visualization")
-            bead_numbers = st.text_input("Enter Bead Numbers to Visualize (comma-separated, or leave blank for all):")
-            bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
+            if selected_files:
+                # Step 5: Bead Segmentation Preparation
+                st.write("### Bead Segmentation and Visualization")
+                bead_numbers = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
+                bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
 
-            # Normalize Indices and Prepare Data for Plotting
-            bead_data = {col_idx: [] for col_idx in range(3)}
+                # Normalize Indices and Prepare Data for Plotting
+                bead_data = {col_idx: [] for col_idx in range(3)}
 
-            for file in selected_files:
-                df = filtered_files[file]
-                filter_values = df[filter_column].to_numpy()
+                for file in selected_files:
+                    df = filtered_files[file]
+                    filter_values = df[filter_column].to_numpy()
 
-                # Bead segmentation logic
-                start_points = []
-                end_points = []
-                i = 0
-                while i < len(filter_values):
-                    if filter_values[i] > filter_threshold:
-                        if not end_points or i > end_points[-1]:
-                            start_points.append(i)
-                        while i < len(filter_values) and filter_values[i] > filter_threshold:
+                    # Bead segmentation logic
+                    start_points = []
+                    end_points = []
+                    i = 0
+                    while i < len(filter_values):
+                        if filter_values[i] > filter_threshold:
+                            if not end_points or i > end_points[-1]:
+                                start_points.append(i)
+                            while i < len(filter_values) and filter_values[i] > filter_threshold:
+                                i += 1
+                            end_points.append(i - 1)
+                        else:
                             i += 1
-                        end_points.append(i - 1)
-                    else:
-                        i += 1
 
-                indices_to_plot = range(len(start_points))
-                if bead_numbers:
-                    indices_to_plot = [i for i in range(len(start_points)) if i + 1 in bead_numbers]
+                    indices_to_plot = range(len(start_points))
+                    if bead_numbers:
+                        indices_to_plot = [i for i in range(len(start_points)) if i + 1 in bead_numbers]
 
-                # Prepare normalized data
-                for col_idx, column in enumerate(df.columns[:3]):
-                    cumulative_index = 0
-                    for i in indices_to_plot:
-                        segment = df.iloc[start_points[i]:end_points[i] + 1]
-                        normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
-                        cumulative_index += len(segment)
-                        bead_data[col_idx].append({
-                            "x": normalized_index,
-                            "y": segment[column].values,
-                            "tooltip": [
-                                f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
-                                for idx, val in zip(segment.index, segment[column].values)
-                            ]
-                        })
+                    # Prepare normalized data
+                    for col_idx, column in enumerate(df.columns[:3]):
+                        cumulative_index = 0
+                        for i in indices_to_plot:
+                            segment = df.iloc[start_points[i]:end_points[i] + 1]
+                            normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
+                            cumulative_index += len(segment)
+                            bead_data[col_idx].append({
+                                "x": normalized_index,
+                                "y": segment[column].values,
+                                "tooltip": [
+                                    f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
+                                    for idx, val in zip(segment.index, segment[column].values)
+                                ]
+                            })
 
-            # Plotting with Plotly
-            fig_columns = [go.Figure() for _ in range(3)]
+                # Plotting with Plotly
+                fig_columns = [go.Figure() for _ in range(3)]
 
-            for col_idx, fig in enumerate(fig_columns):
-                for data in bead_data[col_idx]:
-                    fig.add_trace(go.Scatter(
-                        x=data["x"],
-                        y=data["y"],
-                        mode='lines',
-                        hoverinfo='text',
-                        text=data["tooltip"],
-                        line=dict(width=0.5)
-                    ))
-                fig.update_layout(
-                    title=f"Visualization for Column {col_idx + 1}",
-                    xaxis_title="Normalized Index",
-                    yaxis_title="Signal Value",
-                    height=600,
-                    showlegend=False
-                )
-                st.plotly_chart(fig)
+                for col_idx, fig in enumerate(fig_columns):
+                    for data in bead_data[col_idx]:
+                        fig.add_trace(go.Scatter(
+                            x=data["x"],
+                            y=data["y"],
+                            mode='lines',
+                            hoverinfo='text',
+                            text=data["tooltip"],
+                            line=dict(width=0.5)
+                        ))
+                    fig.update_layout(
+                        title=f"Visualization for Column {col_idx + 1}",
+                        xaxis_title="Normalized Index",
+                        yaxis_title="Signal Value",
+                        height=600,
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig)
 
-            st.write("Visualization Complete!")
+                st.write("Visualization Complete!")
