@@ -15,11 +15,26 @@ st.title("Laser Welding Signal Visualization")
 uploaded_zip = st.file_uploader("Upload a ZIP file containing CSV files:", type="zip")
 
 if uploaded_zip:
+    # Clean up the previous extracted directory if it exists
+    extract_dir = "extracted_csvs"
+    if os.path.exists(extract_dir):
+        # Remove the existing extracted directory and its contents
+        for file_name in os.listdir(extract_dir):
+            file_path = os.path.join(extract_dir, file_name)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                else:
+                    os.rmdir(file_path)
+            except Exception as e:
+                st.error(f"Error cleaning up previous files: {e}")
+        os.rmdir(extract_dir)  # Remove the empty directory itself
+
+    # Create a fresh directory for extracting the new files
+    os.makedirs(extract_dir, exist_ok=True)
+
     # Extract ZIP file contents
     with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
-        # Create a temporary directory to extract files
-        extract_dir = "extracted_csvs"
-        os.makedirs(extract_dir, exist_ok=True)
         zip_ref.extractall(extract_dir)
 
     # List all CSV files extracted
@@ -146,4 +161,3 @@ if uploaded_zip:
                         showlegend=True
                     )
                     st.plotly_chart(fig)
-
