@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
+import numpy as np
 
 # Set page layout to wide
 st.set_page_config(layout="wide")
@@ -29,7 +30,6 @@ if uploaded_zip:
         os.rmdir(extract_dir)
 
     os.makedirs(extract_dir, exist_ok=True)
-
     with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
         zip_ref.extractall(extract_dir)
 
@@ -45,9 +45,10 @@ if uploaded_zip:
         filter_column = st.selectbox("Select the Filter Column to reduce data:", column_names)
         filter_threshold = st.number_input("Set Filter Threshold:", value=1.0)
 
-        limit_method = st.selectbox("Choose Method for Limit Calculation:", ["Rolling Std Dev", "Percentile"])
-        window_size = st.slider("Window Size for Rolling Calculation:", min_value=5, max_value=500, value=100)
-        percentile_val = st.slider("Percentile Value (for Percentile method):", min_value=80, max_value=99, value=95)
+        # Limit method selection
+        st.write("### Upper/Lower Limit Options")
+        method = st.selectbox("Select Method for Limit Calculation:", ["Standard Deviation", "Percentile"])
+        rolling_window = st.slider("Rolling Window Size:", min_value=1, max_value=500, value=50)
 
         filter_triggered = st.button("Visualize")
         session_state = st.session_state
@@ -72,17 +73,19 @@ if uploaded_zip:
 
             if selected_files:
                 st.write("### Bead Segmentation and Visualization")
-                bead_numbers = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
-                bead_numbers = [int(b.strip()) for b in bead_numbers.split(',') if b.strip().isdigit()] if bead_numbers else None
+                bead_input = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
+                bead_numbers = [int(b.strip()) for b in bead_input.split(',') if b.strip().isdigit()] if bead_input else None
 
                 bead_data = {col_idx: [] for col_idx in range(3)}
-                bead_dict = {col_idx: {} for col_idx in range(3)}
+                bead_limits = {col_idx: {} for col_idx in range(3)}
                 file_colors = {file: f"rgb({(hash(file) % 256)},{(hash(file + 'g') % 256)},{(hash(file + 'b') % 256)})" for file in selected_files}
+
+                # First pass to collect data by bead number
+                bead_segments_by_index = {col_idx: {} for col_idx in range(3)}
 
                 for file in selected_files:
                     df = session_state.filtered_files[file]
                     filter_values = df[filter_column].to_numpy()
-
                     start_points = []
                     end_points = []
                     i = 0
@@ -96,9 +99,10 @@ if uploaded_zip:
                         else:
                             i += 1
 
-                    indices_to_plot = range(len(start_points))
+                    bead_count = len(start_points)
+                    indices_to_plot = range(bead_count)
                     if bead_numbers:
-                        indices_to_plot = [i for i in range(len(start_points)) if i + 1 in bead_numbers]
+                        indices_to_plot = [i for i in indices_to_plot if i + 1 in bead_numbers]
 
                     for col_idx, column in enumerate(df.columns[:3]):
                         cumulative_index = 0
@@ -111,16 +115,34 @@ if uploaded_zip:
                                 "x": normalized_index,
                                 "y": segment[column].values,
                                 "tooltip": [
-                                    f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Value: {val}"
+                                    f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}"
                                     for idx, val in zip(segment.index, segment[column].values)
                                 ],
-                                "color": file_colors[file]
+                                "color": file_colors[file],
+                                "bead_index": i
                             })
 
-                            if i + 1 not in bead_dict[col_idx]:
-                                bead_dict[col_idx][i + 1] = []
-                            bead_dict[col_idx][i + 1].append(segment[column].reset_index(drop=True))
+                            if i not in bead_segments_by_index[col_idx]:
+                                bead_segments_by_index[col_idx][i] = []
+                            bead_segments_by_index[col_idx][i].append(segment[column].values)
 
+                # Compute limits for each bead index
+                for col_idx in range(3):
+                    for bead_index, segments in bead_segments_by_index[col_idx].items():
+                        min_len = min(map(len, segments))
+                        truncated_segments = [s[:min_len] for s in segments]
+                        stacked = np.vstack(truncated_segments)
+                        if method == "Standard Deviation":
+                            mean = np.mean(stacked, axis=0)
+                            std = np.std(stacked, axis=0)
+                            upper = pd.Series(mean + 2 * std).rolling(rolling_window, min_periods=1).mean()
+                            lower = pd.Series(mean - 2 * std).rolling(rolling_window, min_periods=1).mean()
+                        elif method == "Percentile":
+                            upper = pd.Series(np.percentile(stacked, 95, axis=0)).rolling(rolling_window, min_periods=1).mean()
+                            lower = pd.Series(np.percentile(stacked, 5, axis=0)).rolling(rolling_window, min_periods=1).mean()
+                        bead_limits[col_idx][bead_index] = (upper.values, lower.values)
+
+                # Plotting
                 fig_columns = [go.Figure() for _ in range(3)]
 
                 for col_idx, fig in enumerate(fig_columns):
@@ -145,23 +167,25 @@ if uploaded_zip:
                             line=dict(color=data["color"], width=0.5)
                         ))
 
-                    for bead_no, segments in bead_dict[col_idx].items():
-                        min_len = min(len(seg) for seg in segments)
-                        aligned = [seg.iloc[:min_len] for seg in segments]
-                        combined = pd.concat(aligned, axis=1)
-                        mean_signal = combined.mean(axis=1)
-
-                        if limit_method == "Rolling Std Dev":
-                            std_signal = combined.std(axis=1)
-                            upper = (mean_signal + std_signal).rolling(window=window_size, min_periods=1).mean()
-                            lower = (mean_signal - std_signal).rolling(window=window_size, min_periods=1).mean()
-                        else:
-                            upper = combined.apply(lambda row: row.quantile(percentile_val / 100), axis=1).rolling(window=window_size, min_periods=1).mean()
-                            lower = combined.apply(lambda row: row.quantile(1 - percentile_val / 100), axis=1).rolling(window=window_size, min_periods=1).mean()
-
-                        x_vals = list(range(len(mean_signal)))
-                        fig.add_trace(go.Scatter(x=x_vals, y=upper, mode='lines', name=f"Bead {bead_no} Upper", line=dict(color='red', dash='dash'), showlegend=False))
-                        fig.add_trace(go.Scatter(x=x_vals, y=lower, mode='lines', name=f"Bead {bead_no} Lower", line=dict(color='blue', dash='dash'), showlegend=False))
+                        bead_index = data["bead_index"]
+                        if bead_index in bead_limits[col_idx]:
+                            upper, lower = bead_limits[col_idx][bead_index]
+                            fig.add_trace(go.Scatter(
+                                x=data["x"],
+                                y=upper[:len(data["x"])],
+                                mode='lines',
+                                name=f"Upper Limit - Bead {bead_index + 1}",
+                                line=dict(color='red', width=1, dash='dash'),
+                                showlegend=False
+                            ))
+                            fig.add_trace(go.Scatter(
+                                x=data["x"],
+                                y=lower[:len(data["x"])],
+                                mode='lines',
+                                name=f"Lower Limit - Bead {bead_index + 1}",
+                                line=dict(color='blue', width=1, dash='dash'),
+                                showlegend=False
+                            ))
 
                     fig.update_layout(
                         title=f"Visualization for {column_name}",
