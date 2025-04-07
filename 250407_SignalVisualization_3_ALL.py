@@ -118,22 +118,32 @@ if uploaded_zip:
                 
                 for col_idx, fig in enumerate(fig_columns):
                     column_name = sample_df.columns[col_idx]  # Get actual column name
+                    legend_shown = set()  # Track which files have already been added to the legend
+                
                     for data in bead_data[col_idx]:
+                        file_name = data["tooltip"][0].split("<br>")[0].split(": ")[1]  # Extract file name from tooltip
+                        show_legend = file_name not in legend_shown
+                        if show_legend:
+                            legend_shown.add(file_name)
+                
                         fig.add_trace(go.Scatter(
                             x=data["x"],
                             y=data["y"],
                             mode='lines',
-                            name=f"{data['tooltip'][0].split('<br>')[0]} - Bead {data['tooltip'][0].split('<br>')[1].split()[-1]}",  # Use File and Bead info for legend
+                            name=file_name if show_legend else None,
+                            legendgroup=file_name,
+                            showlegend=show_legend,
                             hoverinfo='text',
                             text=data["tooltip"],
-                            line=dict(color=data["color"], width=0.5),
-                            showlegend=True
+                            line=dict(color=data["color"], width=0.5)
                         ))
+                
                     fig.update_layout(
                         title=f"Visualization for {column_name}",
                         xaxis_title="Normalized Index",
                         yaxis_title="Signal Value",
                         height=600,
-                        showlegend=True  # Show the legend so toggling works
+                        showlegend=True
                     )
                     st.plotly_chart(fig)
+
