@@ -110,7 +110,8 @@ if uploaded_zip:
                                     f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
                                     for idx, val in zip(segment.index, segment[column].values)
                                 ],
-                                "color": file_colors[file]
+                                "color": file_colors[file],
+                                "name": f"{file} - Bead {i + 1}"  # Add legend name
                             })
 
                 # Plotting with Plotly
@@ -124,14 +125,15 @@ if uploaded_zip:
                             mode='lines',
                             hoverinfo='text',
                             text=data["tooltip"],
-                            line=dict(color=data["color"], width=0.5)
+                            line=dict(color=data["color"], width=0.5),
+                            name=data["name"]  # Use the legend name here
                         ))
                     fig.update_layout(
-                        title=f"Visualization for Column {col_idx + 1}",
+                        title=f"Visualization for Column: {sample_df.columns[col_idx]}",
                         xaxis_title="Normalized Index",
                         yaxis_title="Signal Value",
                         height=600,
-                        showlegend=False
+                        showlegend=True  # Enable legend
                     )
                     st.plotly_chart(fig)
 
