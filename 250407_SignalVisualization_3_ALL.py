@@ -1,7 +1,6 @@
 import streamlit as st
 import zipfile
 import os
-import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
 
@@ -111,7 +110,7 @@ if uploaded_zip:
                                     for idx, val in zip(segment.index, segment[column].values)
                                 ],
                                 "color": file_colors[file],
-                                "name": f"{file} - Bead {i + 1}"  # Add legend name
+                                "name": f"{file} - Bead {i + 1}"  # Legend name
                             })
 
                 # Plotting with Plotly
@@ -126,10 +125,10 @@ if uploaded_zip:
                             hoverinfo='text',
                             text=data["tooltip"],
                             line=dict(color=data["color"], width=0.5),
-                            name=data["name"]  # Use the legend name here
+                            name=data["name"]  # Legend name
                         ))
                     fig.update_layout(
-                        title=f"Visualization for Column: {sample_df.columns[col_idx]}",
+                        title=f"Visualization for Column: {sample_df.columns[col_idx]}",  # Real column name
                         xaxis_title="Normalized Index",
                         yaxis_title="Signal Value",
                         height=600,
