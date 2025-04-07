@@ -1,6 +1,7 @@
 import streamlit as st
 import zipfile
 import os
+import pandas as pd
 import plotly.graph_objects as go
 from io import BytesIO
 
@@ -109,31 +110,30 @@ if uploaded_zip:
                                     f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}" \
                                     for idx, val in zip(segment.index, segment[column].values)
                                 ],
-                                "color": file_colors[file],
-                                "name": f"{file} - Bead {i + 1}"  # Legend name
+                                "color": file_colors[file]
                             })
-
+                
                 # Plotting with Plotly
                 fig_columns = [go.Figure() for _ in range(3)]
-
+                
                 for col_idx, fig in enumerate(fig_columns):
+                    column_name = sample_df.columns[col_idx]  # Get actual column name
                     for data in bead_data[col_idx]:
                         fig.add_trace(go.Scatter(
                             x=data["x"],
                             y=data["y"],
                             mode='lines',
+                            name=f"{data['tooltip'][0].split('<br>')[0]} - Bead {data['tooltip'][0].split('<br>')[1].split()[-1]}",  # Use File and Bead info for legend
                             hoverinfo='text',
                             text=data["tooltip"],
                             line=dict(color=data["color"], width=0.5),
-                            name=data["name"]  # Legend name
+                            showlegend=True
                         ))
                     fig.update_layout(
-                        title=f"Visualization for Column: {sample_df.columns[col_idx]}",  # Real column name
+                        title=f"Visualization for {column_name}",
                         xaxis_title="Normalized Index",
                         yaxis_title="Signal Value",
                         height=600,
-                        showlegend=True  # Enable legend
+                        showlegend=True  # Show the legend so toggling works
                     )
                     st.plotly_chart(fig)
-
-                st.write("Visualization Complete!")
