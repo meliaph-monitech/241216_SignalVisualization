@@ -1,9 +1,9 @@
 import streamlit as st
 import zipfile
 import os
+import shutil
 import pandas as pd
 import plotly.graph_objects as go
-from io import BytesIO
 import numpy as np
 
 # Set page layout to wide
@@ -22,16 +22,11 @@ with st.sidebar:
     if uploaded_zip:
         extract_dir = "extracted_csvs"
         if os.path.exists(extract_dir):
-            for file_name in os.listdir(extract_dir):
-                file_path = os.path.join(extract_dir, file_name)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                    else:
-                        os.rmdir(file_path)
-                except Exception as e:
-                    st.error(f"Error cleaning up previous files: {e}")
-            os.rmdir(extract_dir)
+            try:
+                # Safely remove the existing extraction directory and its contents
+                shutil.rmtree(extract_dir)
+            except Exception as e:
+                st.error(f"Error cleaning up previous files: {e}")
 
         os.makedirs(extract_dir, exist_ok=True)
         with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
