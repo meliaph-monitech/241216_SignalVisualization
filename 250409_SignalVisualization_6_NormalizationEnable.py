@@ -74,7 +74,11 @@ with st.sidebar:
             st.subheader("Rolling Window")
             rolling_window = st.slider("Rolling Window Size:", min_value=1, max_value=500, value=50)
 
-            # Step 7: Visualization trigger
+            # Step 7: Normalization Toggle
+            st.subheader("Normalization")
+            normalize_data = st.checkbox("Normalize data per chosen bead number", value=True)
+
+            # Step 8: Visualization trigger
             visualize_triggered = st.button("Visualize")
 
 if uploaded_zip and visualize_triggered:
@@ -109,15 +113,21 @@ if uploaded_zip and visualize_triggered:
             cumulative_index = 0
             for i in indices_to_plot:
                 segment = df.iloc[start_points[i]:end_points[i] + 1]
+                y_values = segment[column].values
+
+                # Apply normalization if selected
+                if normalize_data:
+                    y_values = (y_values - np.min(y_values)) / (np.max(y_values) - np.min(y_values))
+
                 normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
                 cumulative_index += len(segment)
 
                 bead_data[col_idx].append({
                     "x": normalized_index,
-                    "y": segment[column].values,
+                    "y": y_values,
                     "tooltip": [
                         f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}"
-                        for idx, val in zip(segment.index, segment[column].values)
+                        for idx, val in zip(segment.index, y_values)
                     ],
                     "color": file_colors[file],
                     "bead_index": i
@@ -125,7 +135,7 @@ if uploaded_zip and visualize_triggered:
 
                 if i not in bead_segments_by_index[col_idx]:
                     bead_segments_by_index[col_idx][i] = []
-                bead_segments_by_index[col_idx][i].append(segment[column].values)
+                bead_segments_by_index[col_idx][i].append(y_values)
 
     # Compute limits for each bead index
     for col_idx in range(3):
