@@ -82,11 +82,19 @@ with st.sidebar:
             bead_input = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
             bead_numbers = [int(b.strip()) for b in bead_input.split(',') if b.strip().isdigit()] if bead_input else None
 
-            # Step 6: Normalization Toggle
+            # Step 6: Column Selection
+            st.subheader("Column Selection")
+            selected_columns = st.multiselect(
+                "Select Columns to Display:",
+                options=column_names,
+                default=column_names
+            )
+
+            # Step 7: Normalization Toggle
             st.subheader("Normalization")
             normalize_data = st.checkbox("Normalize data per chosen bead number", value=True)
 
-            # Step 7: Visualization trigger
+            # Step 8: Visualization trigger
             visualize_triggered = st.button("Visualize")
 
 # Helper functions for feature extraction
@@ -132,10 +140,11 @@ def calculate_features(data, feature, fs=1000):
 
 # Visualization
 if uploaded_zip and visualize_triggered:
-    fig_columns = [go.Figure() for _ in range(len(sample_df.columns))]
+    # Prepare only the selected columns for visualization
+    fig_columns = [go.Figure() for _ in selected_columns]
 
-    for col_idx, fig in enumerate(fig_columns):
-        column_name = sample_df.columns[col_idx]
+    for col_idx, column_name in enumerate(selected_columns):
+        fig = fig_columns[col_idx]
 
         for file in filtered_files.keys():
             df = filtered_files[file]
