@@ -55,14 +55,7 @@ with st.sidebar:
 
             st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
 
-            # Step 3: Select CSV File
-            st.subheader("Select CSV File")
-            file_list = list(filtered_files.keys())
-            selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
-            if "All" in selected_files:
-                selected_files = file_list
-
-            # Step 4: Feature Selection
+            # Step 3: Feature Selection
             st.subheader("Feature Selection")
             feature_options = [
                 "Raw Signal",
@@ -80,11 +73,20 @@ with st.sidebar:
             ]
             selected_feature = st.selectbox("Select Feature to Display:", options=feature_options, index=0)
 
-            # Step 5: Rolling Window
+            # Step 4: Rolling Window
             st.subheader("Rolling Window")
             rolling_window = st.slider("Rolling Window Size:", min_value=1, max_value=500, value=50)
 
-            # Step 6: Visualization trigger
+            # Step 5: Bead Selection
+            st.subheader("Bead Selection")
+            bead_input = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
+            bead_numbers = [int(b.strip()) for b in bead_input.split(',') if b.strip().isdigit()] if bead_input else None
+
+            # Step 6: Normalization Toggle
+            st.subheader("Normalization")
+            normalize_data = st.checkbox("Normalize data per chosen bead number", value=True)
+
+            # Step 7: Visualization trigger
             visualize_triggered = st.button("Visualize")
 
 # Helper functions for feature extraction
@@ -130,24 +132,35 @@ def calculate_features(data, feature, fs=1000):
 
 # Visualization
 if uploaded_zip and visualize_triggered:
-    for file in selected_files:
-        df = filtered_files[file]
-        fig = go.Figure()
-        for col in df.columns[:3]:  # Assuming first three columns are signals
-            signal_data = df[col]
+    fig_columns = [go.Figure() for _ in range(len(sample_df.columns))]
+
+    for col_idx, fig in enumerate(fig_columns):
+        column_name = sample_df.columns[col_idx]
+
+        for file in filtered_files.keys():
+            df = filtered_files[file]
+            signal_data = df[column_name]
+
+            # Normalize if selected
+            if normalize_data:
+                signal_data = (signal_data - signal_data.min()) / (signal_data.max() - signal_data.min())
+
+            # Compute features
             feature_data = calculate_features(signal_data, selected_feature)
 
+            # Add line for this file
             fig.add_trace(go.Scatter(
                 x=np.arange(len(feature_data)),
                 y=feature_data,
                 mode='lines',
-                name=f"{col} ({selected_feature})"
+                name=file
             ))
 
         fig.update_layout(
-            title=f"Visualization for {file}",
+            title=f"Visualization for {column_name} ({selected_feature})",
             xaxis_title="Index",
             yaxis_title="Values",
-            height=600
+            height=600,
+            showlegend=True,
         )
         st.plotly_chart(fig)
