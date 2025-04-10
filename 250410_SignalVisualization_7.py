@@ -3,16 +3,16 @@ import zipfile
 import os
 import shutil
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import spectrogram
+import plotly.graph_objects as go
+from scipy.stats import skew, kurtosis
+from scipy.signal import welch
 
 # Set page layout to wide
 st.set_page_config(layout="wide")
 
-# Streamlit Title
-st.title("Laser Welding Signal Visualization")
+# Title
+st.title("Laser Welding Signal Visualization with Feature Extraction")
 
 # Sidebar for inputs
 with st.sidebar:
@@ -37,13 +37,16 @@ with st.sidebar:
 
         if csv_files:
             st.success(f"Extracted {len(csv_files)} CSV files.")
+
+            # Step 2: Filter Data
+            st.subheader("Filter Data")
             sample_df = pd.read_csv(os.path.join(extract_dir, csv_files[0]))
             column_names = sample_df.columns.tolist()
 
-            st.subheader("Filter Data")
             filter_column = st.selectbox("Select the Filter Column to reduce data:", column_names)
             filter_threshold = st.number_input("Set Filter Threshold:", value=1.0)
 
+            # Filter CSV files based on the threshold
             filtered_files = {}
             for file in csv_files:
                 df = pd.read_csv(os.path.join(extract_dir, file))
@@ -52,196 +55,99 @@ with st.sidebar:
 
             st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
 
+            # Step 3: Select CSV File
             st.subheader("Select CSV File")
             file_list = list(filtered_files.keys())
             selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
             if "All" in selected_files:
                 selected_files = file_list
 
-            st.subheader("Bead Selection")
-            bead_input = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
-            bead_numbers = [int(b.strip()) for b in bead_input.split(',') if b.strip().isdigit()] if bead_input else None
+            # Step 4: Feature Selection
+            st.subheader("Feature Selection")
+            feature_options = [
+                "Raw Signal",
+                "Mean",
+                "RMS",
+                "Spectral Entropy",
+                "Peak Frequency",
+                "Bandwidth",
+                "Skewness",
+                "Kurtosis",
+                "Band Power",
+                "Max Amplitude",
+                "Sum of Amplitudes",
+                "Moving Average"
+            ]
+            selected_feature = st.selectbox("Select Feature to Display:", options=feature_options, index=0)
 
-            st.subheader("Limit Calculation Method")
-            method = st.selectbox("Select Method for Limit Calculation:", ["Standard Deviation", "Percentile"])
-
+            # Step 5: Rolling Window
             st.subheader("Rolling Window")
             rolling_window = st.slider("Rolling Window Size:", min_value=1, max_value=500, value=50)
 
-            st.subheader("Normalization")
-            normalize_data = st.checkbox("Normalize data per chosen bead number", value=True)
-
-            st.subheader("View Type")
-            view_type = st.selectbox("Select Data View:", ["Time Domain", "Spectrogram"])
-
+            # Step 6: Visualization trigger
             visualize_triggered = st.button("Visualize")
 
-# MAIN LOGIC
+# Helper functions for feature extraction
+def calculate_features(data, feature, fs=1000):
+    if feature == "Raw Signal":
+        return data
+    elif feature == "Mean":
+        return data.rolling(rolling_window).mean()
+    elif feature == "RMS":
+        return np.sqrt(data.rolling(rolling_window).mean() ** 2)
+    elif feature == "Spectral Entropy":
+        def spectral_entropy(segment):
+            f, Pxx = welch(segment, fs=fs)
+            Pxx = Pxx / np.sum(Pxx)  # Normalize power spectrum
+            return -np.sum(Pxx * np.log2(Pxx + 1e-12))  # Avoid log(0)
+        return data.rolling(rolling_window).apply(spectral_entropy, raw=False)
+    elif feature == "Peak Frequency":
+        def peak_frequency(segment):
+            f, Pxx = welch(segment, fs=fs)
+            return f[np.argmax(Pxx)]
+        return data.rolling(rolling_window).apply(peak_frequency, raw=False)
+    elif feature == "Bandwidth":
+        def bandwidth(segment):
+            f, Pxx = welch(segment, fs=fs)
+            return np.sqrt(np.sum(Pxx * (f - np.mean(f)) ** 2))
+        return data.rolling(rolling_window).apply(bandwidth, raw=False)
+    elif feature == "Skewness":
+        return data.rolling(rolling_window).apply(skew, raw=True)
+    elif feature == "Kurtosis":
+        return data.rolling(rolling_window).apply(kurtosis, raw=True)
+    elif feature == "Band Power":
+        def band_power(segment):
+            f, Pxx = welch(segment, fs=fs)
+            band = (f >= 200) & (f <= 400)  # Example: 200Hz to 400Hz
+            return np.sum(Pxx[band])
+        return data.rolling(rolling_window).apply(band_power, raw=False)
+    elif feature == "Max Amplitude":
+        return data.rolling(rolling_window).max()
+    elif feature == "Sum of Amplitudes":
+        return data.rolling(rolling_window).sum()
+    elif feature == "Moving Average":
+        return data.rolling(rolling_window).mean()
+
+# Visualization
 if uploaded_zip and visualize_triggered:
+    for file in selected_files:
+        df = filtered_files[file]
+        fig = go.Figure()
+        for col in df.columns[:3]:  # Assuming first three columns are signals
+            signal_data = df[col]
+            feature_data = calculate_features(signal_data, selected_feature)
 
-    if view_type == "Spectrogram":
-        st.subheader("Spectrogram View")
+            fig.add_trace(go.Scatter(
+                x=np.arange(len(feature_data)),
+                y=feature_data,
+                mode='lines',
+                name=f"{col} ({selected_feature})"
+            ))
 
-        for file in selected_files:
-            df = filtered_files[file]
-            filter_values = df[filter_column].to_numpy()
-            start_points = []
-            end_points = []
-            i = 0
-            while i < len(filter_values):
-                if filter_values[i] > filter_threshold:
-                    if not end_points or i > end_points[-1]:
-                        start_points.append(i)
-                    while i < len(filter_values) and filter_values[i] > filter_threshold:
-                        i += 1
-                    end_points.append(i - 1)
-                else:
-                    i += 1
-
-            bead_count = len(start_points)
-            indices_to_plot = range(bead_count)
-            if bead_numbers:
-                indices_to_plot = [i for i in indices_to_plot if i + 1 in bead_numbers]
-
-            for col_idx, column in enumerate(df.columns[:3]):
-                st.write(f"**File: {file}, Column: {column}**")
-
-                for i in indices_to_plot:
-                    segment = df.iloc[start_points[i]:end_points[i] + 1]
-                    y_values = segment[column].values
-
-                    if normalize_data:
-                        y_values = (y_values - np.min(y_values)) / (np.max(y_values) - np.min(y_values))
-
-                    f, t, Sxx = spectrogram(y_values, fs=1000)
-
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    ax.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
-                    ax.set_ylabel('Frequency [Hz]')
-                    ax.set_xlabel('Time [sec]')
-                    ax.set_title(f'Bead {i+1} - {column}')
-                    ax.set_ylim(0, 1000)
-                    st.pyplot(fig)
-
-    else:
-        # TIME DOMAIN VIEW (your original logic)
-        bead_data = {col_idx: [] for col_idx in range(3)}
-        bead_limits = {col_idx: {} for col_idx in range(3)}
-        file_colors = {file: f"rgb({(hash(file) % 256)},{(hash(file + 'g') % 256)},{(hash(file + 'b') % 256)})" for file in selected_files}
-        bead_segments_by_index = {col_idx: {} for col_idx in range(3)}
-
-        for file in selected_files:
-            df = filtered_files[file]
-            filter_values = df[filter_column].to_numpy()
-            start_points = []
-            end_points = []
-            i = 0
-            while i < len(filter_values):
-                if filter_values[i] > filter_threshold:
-                    if not end_points or i > end_points[-1]:
-                        start_points.append(i)
-                    while i < len(filter_values) and filter_values[i] > filter_threshold:
-                        i += 1
-                    end_points.append(i - 1)
-                else:
-                    i += 1
-
-            bead_count = len(start_points)
-            indices_to_plot = range(bead_count)
-            if bead_numbers:
-                indices_to_plot = [i for i in indices_to_plot if i + 1 in bead_numbers]
-
-            for col_idx, column in enumerate(df.columns[:3]):
-                cumulative_index = 0
-                for i in indices_to_plot:
-                    segment = df.iloc[start_points[i]:end_points[i] + 1]
-                    y_values = segment[column].values
-
-                    if normalize_data:
-                        y_values = (y_values - np.min(y_values)) / (np.max(y_values) - np.min(y_values))
-
-                    normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
-                    cumulative_index += len(segment)
-
-                    bead_data[col_idx].append({
-                        "x": normalized_index,
-                        "y": y_values,
-                        "tooltip": [
-                            f"File: {file}<br>Bead: {i + 1}<br>Original Index: {idx}<br>Start Point: {start_points[i]}<br>End Point: {end_points[i]}<br>Value: {val}"
-                            for idx, val in zip(segment.index, y_values)
-                        ],
-                        "color": file_colors[file],
-                        "bead_index": i
-                    })
-
-                    if i not in bead_segments_by_index[col_idx]:
-                        bead_segments_by_index[col_idx][i] = []
-                    bead_segments_by_index[col_idx][i].append(y_values)
-
-        for col_idx in range(3):
-            for bead_index, segments in bead_segments_by_index[col_idx].items():
-                min_len = min(map(len, segments))
-                truncated_segments = [s[:min_len] for s in segments]
-                stacked = np.vstack(truncated_segments)
-                if method == "Standard Deviation":
-                    mean = np.mean(stacked, axis=0)
-                    std = np.std(stacked, axis=0)
-                    upper = pd.Series(mean + 2 * std).rolling(rolling_window, min_periods=1).mean()
-                    lower = pd.Series(mean - 2 * std).rolling(rolling_window, min_periods=1).mean()
-                elif method == "Percentile":
-                    upper = pd.Series(np.percentile(stacked, 95, axis=0)).rolling(rolling_window, min_periods=1).mean()
-                    lower = pd.Series(np.percentile(stacked, 5, axis=0)).rolling(rolling_window, min_periods=1).mean()
-                bead_limits[col_idx][bead_index] = (upper.values, lower.values)
-
-        fig_columns = [go.Figure() for _ in range(3)]
-
-        for col_idx, fig in enumerate(fig_columns):
-            column_name = sample_df.columns[col_idx]
-            legend_shown = set()
-
-            for data in bead_data[col_idx]:
-                file_name = data["tooltip"][0].split("<br>")[0].split(": ")[1]
-                show_legend = file_name not in legend_shown
-                if show_legend:
-                    legend_shown.add(file_name)
-
-                fig.add_trace(go.Scatter(
-                    x=data["x"],
-                    y=data["y"],
-                    mode='lines',
-                    name=file_name if show_legend else None,
-                    legendgroup=file_name,
-                    showlegend=show_legend,
-                    hoverinfo='text',
-                    text=data["tooltip"],
-                    line=dict(color=data["color"], width=0.5)
-                ))
-
-                bead_index = data["bead_index"]
-                if bead_index in bead_limits[col_idx]:
-                    upper, lower = bead_limits[col_idx][bead_index]
-                    fig.add_trace(go.Scatter(
-                        x=data["x"],
-                        y=upper[:len(data["x"])],
-                        mode='lines',
-                        name=f"Upper Limit - Bead {bead_index + 1}",
-                        line=dict(color='red', width=1, dash='dash'),
-                        showlegend=False
-                    ))
-                    fig.add_trace(go.Scatter(
-                        x=data["x"],
-                        y=lower[:len(data["x"])],
-                        mode='lines',
-                        name=f"Lower Limit - Bead {bead_index + 1}",
-                        line=dict(color='blue', width=1, dash='dash'),
-                        showlegend=False
-                    ))
-
-            fig.update_layout(
-                title=f"Visualization for {column_name}",
-                xaxis_title="Normalized Index",
-                yaxis_title="Signal Value",
-                height=600,
-                showlegend=True
-            )
-            st.plotly_chart(fig)
+        fig.update_layout(
+            title=f"Visualization for {file}",
+            xaxis_title="Index",
+            yaxis_title="Values",
+            height=600
+        )
+        st.plotly_chart(fig)
