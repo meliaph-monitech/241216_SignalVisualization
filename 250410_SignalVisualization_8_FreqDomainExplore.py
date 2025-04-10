@@ -5,13 +5,14 @@ import shutil
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from scipy.stats import skew, kurtosis
 from scipy.signal import welch
 
 # Set page layout to wide
 st.set_page_config(layout="wide")
 
 # Title
-st.title("Laser Welding Signal Visualization with Frequency Features")
+st.title("Laser Welding Signal Visualization with Feature Extraction and Frequency Analysis")
 
 # Sidebar for inputs
 with st.sidebar:
@@ -58,13 +59,18 @@ with st.sidebar:
             st.subheader("Feature Selection")
             feature_options = [
                 "Raw Signal",
-                "Band Power (200Hz)",
-                "Band Power (400Hz)",
-                "Spectral Flatness",
-                "Peak Frequency (200Hz Region)",
-                "Peak Frequency (400Hz Region)",
-                "Band Power Ratio (200Hz/Total)",
-                "Band Power Ratio (400Hz/Total)"
+                "Mean",
+                "RMS",
+                "Spectral Entropy",
+                "Peak Frequency",
+                "Bandwidth",
+                "Skewness",
+                "Kurtosis",
+                "Band Power",
+                "Max Amplitude",
+                "Sum of Amplitudes",
+                "Moving Average",
+                "Frequency Spectrum"  # New option for frequency spectrum
             ]
             selected_feature = st.selectbox("Select Feature to Display:", options=feature_options, index=0)
 
@@ -93,60 +99,55 @@ with st.sidebar:
             visualize_triggered = st.button("Visualize")
 
 # Helper functions for feature extraction
-def calculate_frequency_features(data, feature, fs=1000):
-    # Welch method parameters
-    nperseg = 256
-
+def calculate_features(data, feature, fs=1000):
     if feature == "Raw Signal":
         return data
-    elif feature == "Band Power (200Hz)":
+    elif feature == "Mean":
+        return data.rolling(rolling_window).mean()
+    elif feature == "RMS":
+        return np.sqrt(data.rolling(rolling_window).mean() ** 2)
+    elif feature == "Spectral Entropy":
+        def spectral_entropy(segment):
+            f, Pxx = welch(segment, fs=fs)
+            Pxx = Pxx / np.sum(Pxx)  # Normalize power spectrum
+            return -np.sum(Pxx * np.log2(Pxx + 1e-12))  # Avoid log(0)
+        return data.rolling(rolling_window).apply(spectral_entropy, raw=False)
+    elif feature == "Peak Frequency":
+        def peak_frequency(segment):
+            f, Pxx = welch(segment, fs=fs)
+            return f[np.argmax(Pxx)]
+        return data.rolling(rolling_window).apply(peak_frequency, raw=False)
+    elif feature == "Bandwidth":
+        def bandwidth(segment):
+            f, Pxx = welch(segment, fs=fs)
+            return np.sqrt(np.sum(Pxx * (f - np.mean(f)) ** 2))
+        return data.rolling(rolling_window).apply(bandwidth, raw=False)
+    elif feature == "Skewness":
+        return data.rolling(rolling_window).apply(skew, raw=True)
+    elif feature == "Kurtosis":
+        return data.rolling(rolling_window).apply(kurtosis, raw=True)
+    elif feature == "Band Power":
         def band_power(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            band = (f >= 190) & (f <= 210)  # 200Hz band
+            f, Pxx = welch(segment, fs=fs)
+            band = (f >= 200) & (f <= 400)  # Example: 200Hz to 400Hz
             return np.sum(Pxx[band])
         return data.rolling(rolling_window).apply(band_power, raw=False)
-    elif feature == "Band Power (400Hz)":
-        def band_power(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            band = (f >= 390) & (f <= 410)  # 400Hz band
-            return np.sum(Pxx[band])
-        return data.rolling(rolling_window).apply(band_power, raw=False)
-    elif feature == "Spectral Flatness":
-        def spectral_flatness(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            geometric_mean = np.exp(np.mean(np.log(Pxx + 1e-12)))  # Avoid log(0)
-            arithmetic_mean = np.mean(Pxx)
-            return geometric_mean / arithmetic_mean
-        return data.rolling(rolling_window).apply(spectral_flatness, raw=False)
-    elif feature == "Peak Frequency (200Hz Region)":
-        def peak_frequency(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            band = (f >= 190) & (f <= 210)
-            return f[band][np.argmax(Pxx[band])]
-        return data.rolling(rolling_window).apply(peak_frequency, raw=False)
-    elif feature == "Peak Frequency (400Hz Region)":
-        def peak_frequency(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            band = (f >= 390) & (f <= 410)
-            return f[band][np.argmax(Pxx[band])]
-        return data.rolling(rolling_window).apply(peak_frequency, raw=False)
-    elif feature == "Band Power Ratio (200Hz/Total)":
-        def band_ratio(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            total_power = np.sum(Pxx)
-            band_power = np.sum(Pxx[(f >= 190) & (f <= 210)])
-            return band_power / total_power
-        return data.rolling(rolling_window).apply(band_ratio, raw=False)
-    elif feature == "Band Power Ratio (400Hz/Total)":
-        def band_ratio(segment):
-            f, Pxx = welch(segment, fs=fs, nperseg=nperseg)
-            total_power = np.sum(Pxx)
-            band_power = np.sum(Pxx[(f >= 390) & (f <= 410)])
-            return band_power / total_power
-        return data.rolling(rolling_window).apply(band_ratio, raw=False)
+    elif feature == "Max Amplitude":
+        return data.rolling(rolling_window).max()
+    elif feature == "Sum of Amplitudes":
+        return data.rolling(rolling_window).sum()
+    elif feature == "Moving Average":
+        return data.rolling(rolling_window).mean()
+    elif feature == "Frequency Spectrum":  # New feature for frequency spectrum
+        def frequency_spectrum(segment):
+            fft_data = np.fft.fft(segment)
+            freqs = np.fft.fftfreq(len(segment), d=1/fs)
+            return abs(fft_data[:len(freqs) // 2])  # Only return positive frequencies
+        return data.rolling(rolling_window).apply(frequency_spectrum, raw=False)
 
 # Visualization
 if uploaded_zip and visualize_triggered:
+    # Prepare only the selected columns for visualization
     fig_columns = [go.Figure() for _ in selected_columns]
 
     for col_idx, column_name in enumerate(selected_columns):
@@ -161,20 +162,30 @@ if uploaded_zip and visualize_triggered:
                 signal_data = (signal_data - signal_data.min()) / (signal_data.max() - signal_data.min())
 
             # Compute features
-            feature_data = calculate_frequency_features(signal_data, selected_feature)
+            feature_data = calculate_features(signal_data, selected_feature)
 
             # Add line for this file
-            fig.add_trace(go.Scatter(
-                x=np.arange(len(feature_data)),
-                y=feature_data,
-                mode='lines',
-                name=file
-            ))
+            if selected_feature == "Frequency Spectrum":  # Special handling for frequency spectrum
+                freqs = np.fft.fftfreq(len(signal_data), d=1 / 1000)
+                positive_freqs = freqs[:len(freqs) // 2]
+                fig.add_trace(go.Scatter(
+                    x=positive_freqs,
+                    y=feature_data.iloc[len(feature_data) // 2].values,  # Example: take the middle segment
+                    mode='lines',
+                    name=file
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=np.arange(len(feature_data)),
+                    y=feature_data,
+                    mode='lines',
+                    name=file
+                ))
 
         fig.update_layout(
             title=f"Visualization for {column_name} ({selected_feature})",
-            xaxis_title="Index",
-            yaxis_title="Values",
+            xaxis_title="Frequency (Hz)" if selected_feature == "Frequency Spectrum" else "Index",
+            yaxis_title="Amplitude" if selected_feature == "Frequency Spectrum" else "Values",
             height=600,
             showlegend=True,
         )
