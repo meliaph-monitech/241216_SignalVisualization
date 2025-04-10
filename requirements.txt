@@ -2,4 +2,5 @@ streamlit
 pandas
 plotly
 matplotlib
-spectrogram
+scipy
+numpy
