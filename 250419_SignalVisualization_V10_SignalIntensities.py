@@ -3,15 +3,15 @@ import zipfile
 import os
 import shutil
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
-import scipy.signal as signal
+import plotly.graph_objects as go
+from scipy.signal import spectrogram
 
 # Set page layout to wide
 st.set_page_config(layout="wide")
 
 # Streamlit Title
-st.title("Laser Welding Signal Visualization with Frequency-Based Rolling Variance")
+st.title("Laser Welding Signal Visualization with Signal Intensities")
 
 # Sidebar for inputs
 with st.sidebar:
@@ -24,8 +24,7 @@ with st.sidebar:
         extract_dir = "extracted_csvs"
         if os.path.exists(extract_dir):
             try:
-                # Safely remove the existing extraction directory and its contents
-                shutil.rmtree(extract_dir)
+                shutil.rmtree(extract_dir)  # Remove any existing files
             except Exception as e:
                 st.error(f"Error cleaning up previous files: {e}")
 
@@ -46,6 +45,11 @@ with st.sidebar:
             filter_column = st.selectbox("Select the Filter Column to reduce data:", column_names)
             filter_threshold = st.number_input("Set Filter Threshold:", value=1.0)
 
+            # Step 3: Frequency Selection
+            st.subheader("Frequency Selection")
+            sampling_frequency = st.number_input("Sampling Frequency (Hz):", min_value=1000, max_value=50000, value=10000)
+            chosen_frequency = st.number_input("Choose Frequency of Interest (Hz):", min_value=1, value=240)
+
             # Filter CSV files based on the threshold
             filtered_files = {}
             for file in csv_files:
@@ -55,74 +59,151 @@ with st.sidebar:
 
             st.success(f"Filtered down to {len(filtered_files)} files after applying the threshold.")
 
-            # Step 3: Select CSV File
-            st.subheader("Select CSV File")
-            file_list = list(filtered_files.keys())
-            selected_files = st.multiselect("Select CSV file(s) to visualize:", options=["All"] + file_list, default="All")
-            if "All" in selected_files:
-                selected_files = file_list
+            # Step 4: Bead Selection
+            st.subheader("Bead Selection")
+            bead_input = st.text_input("Enter Bead Numbers to Visualize (default Bead No.1, blank for all):", value="1")
+            bead_numbers = [int(b.strip()) for b in bead_input.split(',') if b.strip().isdigit()] if bead_input else None
 
-            # Step 4: Frequency Input
-            st.subheader("Frequency Selection")
-            chosen_frequency = st.number_input("Enter the frequency (Hz) to analyze:", min_value=1, value=240)
+            # Step 5: Limit Calculation Method
+            st.subheader("Limit Calculation Method")
+            method = st.selectbox("Select Method for Limit Calculation:", ["Standard Deviation", "Percentile"])
 
-            # Step 5: Rolling Window
+            # Step 6: Rolling Window
             st.subheader("Rolling Window")
             rolling_window = st.slider("Rolling Window Size:", min_value=1, max_value=500, value=50)
-
-            # Step 6: Normalization Toggle
-            st.subheader("Normalization")
-            normalize_data = st.checkbox("Normalize data per chosen frequency", value=True)
 
             # Step 7: Visualization trigger
             visualize_triggered = st.button("Visualize")
 
 if uploaded_zip and visualize_triggered:
-    # Prepare for signal intensity extraction
-    file_colors = {file: f"rgb({(hash(file) % 256)},{(hash(file + 'g') % 256)},{(hash(file + 'b') % 256)})" for file in selected_files}
-    
-    # Initialize plotly figure
-    fig = go.Figure()
+    bead_data = {col_idx: [] for col_idx in range(3)}
+    bead_limits = {col_idx: {} for col_idx in range(3)}
+    file_colors = {file: f"rgb({(hash(file) % 256)},{(hash(file + 'g') % 256)},{(hash(file + 'b') % 256)})" for file in filtered_files.keys()}
 
-    for file in selected_files:
+    bead_segments_by_index = {col_idx: {} for col_idx in range(3)}
+
+    for file in filtered_files.keys():
         df = filtered_files[file]
+        filter_values = df[filter_column].to_numpy()
+        start_points = []
+        end_points = []
+        i = 0
+        while i < len(filter_values):
+            if filter_values[i] > filter_threshold:
+                if not end_points or i > end_points[-1]:
+                    start_points.append(i)
+                while i < len(filter_values) and filter_values[i] > filter_threshold:
+                    i += 1
+                end_points.append(i - 1)
+            else:
+                i += 1
 
-        # Extract the raw signal values
-        signal_column = df.iloc[:, 0].values  # Assuming the first column contains the raw signal
-        time_column = np.arange(len(signal_column)) / 10000  # Assuming a sampling rate of 10 kHz
-        
-        # Compute the spectrogram
-        fs = 10000  # Sampling frequency
-        f, t, Sxx = signal.spectrogram(signal_column, fs=fs, nperseg=1024, noverlap=512)
-        
-        # Find the closest frequency index to the chosen frequency
-        freq_idx = np.abs(f - chosen_frequency).argmin()
-        signal_intensity = Sxx[freq_idx, :]  # Extract signal intensity at the chosen frequency
+        bead_count = len(start_points)
+        indices_to_plot = range(bead_count)
+        if bead_numbers:
+            indices_to_plot = [i for i in indices_to_plot if i + 1 in bead_numbers]
 
-        # Normalize the signal intensity if selected
-        if normalize_data:
-            signal_intensity = (signal_intensity - np.min(signal_intensity)) / (np.max(signal_intensity) - np.min(signal_intensity))
+        for col_idx, column in enumerate(df.columns[:3]):
+            cumulative_index = 0
+            for i in indices_to_plot:
+                segment = df.iloc[start_points[i]:end_points[i] + 1]
+                normalized_index = list(range(cumulative_index, cumulative_index + len(segment)))
+                cumulative_index += len(segment)
 
-        # Calculate rolling variance
-        rolling_variance = pd.Series(signal_intensity).rolling(rolling_window, min_periods=1).var()
+                # Compute spectrogram for the segment
+                f, t, Sxx = spectrogram(
+                    segment[column],
+                    fs=sampling_frequency,
+                    nperseg=min(1024, len(segment)),
+                    noverlap=256,
+                    nfft=2048
+                )
+                Sxx_dB = 20 * np.log10(np.abs(Sxx) + np.finfo(float).eps)
 
-        # Add the rolling variance to the plot
-        fig.add_trace(go.Scatter(
-            x=t,
-            y=rolling_variance,
-            mode='lines',
-            name=f"Rolling Variance - {file}",
-            line=dict(color=file_colors[file], width=2)
-        ))
+                # Extract intensity at the chosen frequency
+                freq_indices = np.where((f >= chosen_frequency - 5) & (f <= chosen_frequency + 5))[0]
+                if len(freq_indices) > 0:
+                    intensity_over_time = np.mean(Sxx_dB[freq_indices, :], axis=0)
 
-    # Update plot layout
-    fig.update_layout(
-        title="Rolling Variance of Signal Intensity at Chosen Frequency",
-        xaxis_title="Time (s)",
-        yaxis_title="Rolling Variance",
-        height=600,
-        showlegend=True
-    )
+                    bead_data[col_idx].append({
+                        "x": t,
+                        "y": intensity_over_time,
+                        "tooltip": [f"File: {file}<br>Bead: {i + 1}<br>Time: {time:.2f}s<br>Intensity: {intensity:.2f}dB"
+                                    for time, intensity in zip(t, intensity_over_time)],
+                        "color": file_colors[file],
+                        "bead_index": i
+                    })
 
-    # Display the plot
-    st.plotly_chart(fig)
+                    if i not in bead_segments_by_index[col_idx]:
+                        bead_segments_by_index[col_idx][i] = []
+                    bead_segments_by_index[col_idx][i].append(intensity_over_time)
+
+    # Compute limits for each bead index
+    for col_idx in range(3):
+        for bead_index, segments in bead_segments_by_index[col_idx].items():
+            min_len = min(map(len, segments))
+            truncated_segments = [s[:min_len] for s in segments]
+            stacked = np.vstack(truncated_segments)
+            if method == "Standard Deviation":
+                mean = np.mean(stacked, axis=0)
+                std = np.std(stacked, axis=0)
+                upper = pd.Series(mean + 2 * std).rolling(rolling_window, min_periods=1).mean()
+                lower = pd.Series(mean - 2 * std).rolling(rolling_window, min_periods=1).mean()
+            elif method == "Percentile":
+                upper = pd.Series(np.percentile(stacked, 95, axis=0)).rolling(rolling_window, min_periods=1).mean()
+                lower = pd.Series(np.percentile(stacked, 5, axis=0)).rolling(rolling_window, min_periods=1).mean()
+            bead_limits[col_idx][bead_index] = (upper.values, lower.values)
+
+    # Plotting
+    fig_columns = [go.Figure() for _ in range(3)]
+
+    for col_idx, fig in enumerate(fig_columns):
+        column_name = sample_df.columns[col_idx]
+        legend_shown = set()
+
+        for data in bead_data[col_idx]:
+            file_name = data["tooltip"][0].split("<br>")[0].split(": ")[1]
+            show_legend = file_name not in legend_shown
+            if show_legend:
+                legend_shown.add(file_name)
+
+            fig.add_trace(go.Scatter(
+                x=data["x"],
+                y=data["y"],
+                mode='lines',
+                name=file_name if show_legend else None,
+                legendgroup=file_name,
+                showlegend=show_legend,
+                hoverinfo='text',
+                text=data["tooltip"],
+                line=dict(color=data["color"], width=0.5)
+            ))
+
+            bead_index = data["bead_index"]
+            if bead_index in bead_limits[col_idx]:
+                upper, lower = bead_limits[col_idx][bead_index]
+                fig.add_trace(go.Scatter(
+                    x=data["x"],
+                    y=upper[:len(data["x"])],
+                    mode='lines',
+                    name=f"Upper Limit - Bead {bead_index + 1}",
+                    line=dict(color='red', width=1, dash='dash'),
+                    showlegend=False
+                ))
+                fig.add_trace(go.Scatter(
+                    x=data["x"],
+                    y=lower[:len(data["x"])],
+                    mode='lines',
+                    name=f"Lower Limit - Bead {bead_index + 1}",
+                    line=dict(color='blue', width=1, dash='dash'),
+                    showlegend=False
+                ))
+
+        fig.update_layout(
+            title=f"Visualization for {column_name}",
+            xaxis_title="Time (s)",
+            yaxis_title="Signal Intensity (dB)",
+            height=600,
+            showlegend=True
+        )
+        st.plotly_chart(fig)
