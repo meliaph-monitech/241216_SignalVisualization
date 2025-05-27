@@ -124,15 +124,19 @@ if uploaded_zip:
                             mode='lines',
                             hoverinfo='text',
                             text=data["tooltip"],
+                            name=file,  # Adds legend with CSV file name
+                            legendgroup=file,  # Groups traces from the same file
                             line=dict(color=data["color"], width=0.5)
                         ))
+
                     fig.update_layout(
                         title=f"Visualization for Column {col_idx + 1}",
                         xaxis_title="Normalized Index",
                         yaxis_title="Signal Value",
                         height=600,
-                        showlegend=False
+                        showlegend=True  # Enable legend display
                     )
+
                     st.plotly_chart(fig)
 
                 st.write("Visualization Complete!")
