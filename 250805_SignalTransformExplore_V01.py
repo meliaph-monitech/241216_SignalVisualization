@@ -135,7 +135,7 @@ if st.session_state.segmented_data:
 
         # --- Curve Fit ---
         with tabs[3]:
-            deg = st.slider("Curve Fit Polynomial Degree", 1, 10, 5)
+            deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 5)
             fig = go.Figure()
             for obs in st.session_state.observations:
                 x = np.arange(len(obs["data"]))
