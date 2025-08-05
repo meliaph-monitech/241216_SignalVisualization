@@ -261,15 +261,14 @@ if st.session_state.segmented_data:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-
         # --- Signal Intensity (dB) ---
         with tabs[5]:
             st.subheader("Signal Intensity (dB) Over Time")
             
-            sampling_rate = st.number_input("Sampling Rate (Hz)", value=2000, min_value=1)
-            band_low, band_high = st.slider("Frequency Band (Hz)", 0, 1000, (50, 150), step=50)
-            window_size = st.slider("Window Size (ms)", 10, 500, 50)  # sliding FFT window
-            overlap = st.slider("Window Overlap (%)", 0, 90, 50)
+            sampling_rate = st.number_input("Sampling Rate (Hz) - Intensity", value=2000, min_value=1)
+            band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (50, 150), step=50)
+            window_size = st.slider("Window Size (ms) - Intensity", 10, 500, 50)  # sliding FFT window
+            overlap = st.slider("Window Overlap (%) - Intensity", 0, 90, 50)
         
             fig = go.Figure()
         
@@ -304,3 +303,4 @@ if st.session_state.segmented_data:
                 yaxis_title="Intensity (dB)"
             )
             st.plotly_chart(fig, use_container_width=True)
+
