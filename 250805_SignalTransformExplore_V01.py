@@ -150,19 +150,34 @@ if st.session_state.segmented_data:
 
         # --- FFT Band Intensity ---
         with tabs[4]:
+            # Sampling rate input (needed for correct FFT frequency scaling)
+            sampling_rate = st.number_input("Sampling Rate (Hz)", value=2000, min_value=1)
+        
+            # Frequency band slider (0-1000Hz in 50Hz steps)
             band_low, band_high = st.slider("Frequency Band (Hz)", 
                                             min_value=0, 
                                             max_value=1000, 
                                             value=(50, 150), 
                                             step=50)
+            
             fig = go.Figure()
+            intensities = []
+            labels = []
+            
             for obs in st.session_state.observations:
                 fft_vals = np.fft.rfft(obs["data"])
-                freqs = np.fft.rfftfreq(len(obs["data"]))
-                band_intensity = np.sum(np.abs(fft_vals[(freqs >= band_low) & (freqs <= band_high)]))
+                freqs = np.fft.rfftfreq(len(obs["data"]), d=1.0/sampling_rate)  # Convert to Hz
+                mask = (freqs >= band_low) & (freqs <= band_high)
+                band_intensity = np.sum(np.abs(fft_vals[mask]))
+                intensities.append(band_intensity)
+                labels.append(f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})")
                 color = "green" if obs["status"] == "OK" else "red"
-                fig.add_trace(go.Bar(x=[f"{obs['csv']} - Bead {obs['bead']}"],
-                                     y=[band_intensity],
-                                     name=obs["status"], marker_color=color))
+                fig.add_trace(go.Bar(x=[labels[-1]], y=[band_intensity], marker_color=color, name=obs['status']))
+        
+            # Auto-scale y-axis based on max intensity
+            if intensities:
+                fig.update_yaxes(range=[0, max(intensities)*1.2])  # add 20% padding
+            
             fig.update_layout(title="FFT Band Intensity", xaxis_title="Signal", yaxis_title="Intensity")
             st.plotly_chart(fig, use_container_width=True)
+
