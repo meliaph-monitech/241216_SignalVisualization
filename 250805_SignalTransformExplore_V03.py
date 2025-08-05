@@ -190,11 +190,10 @@ if st.session_state.segmented_data:
             fig.update_layout(title="Curve Fit Signal", xaxis_title="Index", yaxis_title="Signal Value")
             st.plotly_chart(fig, use_container_width=True)
 
-        # --- FFT Spectrum (Zoomed to Selected Band, in dB) ---
+        # --- FFT Spectrum (Zoomed to Selected Band, in dB, Reversed) ---
         with tabs[4]:
             sampling_rate = st.number_input("Sampling Rate (Hz) - Spectrum", value=2000, min_value=1)
         
-            # Frequency band slider (0-1000Hz in 50Hz steps)
             band_low, band_high = st.slider("Frequency Band (Hz) - Spectrum",
                                             min_value=0,
                                             max_value=1000,
@@ -207,32 +206,31 @@ if st.session_state.segmented_data:
                 fft_vals = np.fft.rfft(obs["data"])
                 freqs = np.fft.rfftfreq(len(obs["data"]), d=1.0/sampling_rate)
                 magnitude = np.abs(fft_vals)
+                magnitude_db = 20 * np.log10(magnitude + 1e-12)  # Convert to dB
         
-                # Convert to dB scale
-                magnitude_db = 20 * np.log10(magnitude + 1e-12)  # avoid log(0)
-        
-                # Filter to zoom only the selected frequency band
                 mask = (freqs >= band_low) & (freqs <= band_high)
                 freqs_zoom = freqs[mask]
                 magnitude_zoom = magnitude_db[mask]
         
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
-                    x=freqs_zoom, y=magnitude_zoom,
+                    x=freqs_zoom,
+                    y=magnitude_zoom,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
                     line=dict(color=color),
-                    fill='tozeroy',  # area-style fill
-                    fillcolor='rgba(0,0,0,0.1)'
+                    fill='tozeroy',  # Fill below the curve
+                    fillcolor='rgba(0,0,0,0.05)'
                 ))
         
-            # Update layout
             fig.update_layout(
                 title=f"FFT Spectrum (Zoomed {band_low}-{band_high} Hz, in dB)",
                 xaxis_title="Frequency (Hz)",
                 yaxis_title="Signal Intensity (dB)",
-                xaxis=dict(range=[band_low, band_high])
+                xaxis=dict(range=[band_low, band_high]),
+                yaxis=dict(autorange="reversed")  # Flip Y-axis
             )
+        
             st.plotly_chart(fig, use_container_width=True)
 
         # --- Signal Intensity (dB) ---
