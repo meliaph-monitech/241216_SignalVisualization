@@ -119,10 +119,10 @@ if st.session_state.segmented_data:
 
         # --- Smoothed Signal ---
         with tabs[1]:
-            window = st.slider("Savitzky-Golay Window Length", 5, 51, 15, step=2)
+            window = st.slider("Savitzky-Golay Window Length", 5, 101, 51, step=10)
             poly = st.slider("Polynomial Order", 2, 5, 2)
             use_step = st.checkbox("Display as Step Line (Smoothed)", value=False)
-            step_interval = st.slider("Step Interval (points) - Smoothed", 10, 500, 50) if use_step else None
+            step_interval = st.slider("Step Interval (points) - Smoothed", 10, 500, 70) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
@@ -146,8 +146,8 @@ if st.session_state.segmented_data:
             cutoff = st.slider("Low-pass Cutoff Frequency", 0.01, 0.5, 0.1)
             order = st.slider("Filter Order", 1, 5, 2)
             use_step = st.checkbox("Display as Step Line (Low-pass)", value=False)
-            step_interval = st.slider("Step Interval (points) - Low-pass", 10, 500, 50) if use_step else None
-        
+            step_interval = st.slider("Step Interval (points) - Low-pass", 10, 500, 70) if use_step else None
+
             fig = go.Figure()
             for obs in st.session_state.observations:
                 b, a = butter(order, cutoff, btype='low', analog=False)
@@ -168,9 +168,9 @@ if st.session_state.segmented_data:
         
         # --- Curve Fit ---
         with tabs[3]:
-            deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 5)
+            deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 25)
             use_step = st.checkbox("Display as Step Line (Curve Fit)", value=False)
-            step_interval = st.slider("Step Interval (points) - Curve Fit", 10, 500, 50) if use_step else None
+            step_interval = st.slider("Step Interval (points) - Curve Fit", 10, 500, 70) if use_step else None
 
             fig = go.Figure()
             for obs in st.session_state.observations:
@@ -192,12 +192,12 @@ if st.session_state.segmented_data:
 
         # --- FFT Spectrum (Zoomed to Selected Band, in dB, Reversed) ---
         with tabs[4]:
-            sampling_rate = st.number_input("Sampling Rate (Hz) - Spectrum", value=2000, min_value=1)
+            sampling_rate = st.number_input("Sampling Rate (Hz) - Spectrum", value=10000, min_value=1)
         
             band_low, band_high = st.slider("Frequency Band (Hz) - Spectrum",
                                             min_value=0,
                                             max_value=1000,
-                                            value=(50, 150),
+                                            value=(100, 200),
                                             step=50)
         
             fig = go.Figure()
@@ -243,7 +243,7 @@ if st.session_state.segmented_data:
             use_exact_freq = st.checkbox("Use Exact Frequency (Hz) Instead of Band")
         
             if use_exact_freq:
-                exact_freq = st.number_input("Exact Frequency (Hz)", value=300, min_value=0, max_value=1000, step=50)
+                exact_freq = st.number_input("Exact Frequency (Hz)", value=150, min_value=0, max_value=1000, step=50)
             else:
                 band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (130, 170), step=10)
         
