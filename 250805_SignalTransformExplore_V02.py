@@ -24,6 +24,12 @@ def segment_beads(df, column, threshold):
             i += 1
     return list(zip(start_indices, end_indices))
 
+def aggregate_for_step(x, y, interval):
+    """Aggregate x and y into buckets of given interval for step plotting."""
+    agg_x = x[::interval]
+    agg_y = [np.mean(y[i:i+interval]) for i in range(0, len(y), interval)]
+    return agg_x[:len(agg_y)], agg_y
+
 # --- Session State ---
 if "segmented_data" not in st.session_state:
     st.session_state.segmented_data = None
@@ -109,18 +115,21 @@ if st.session_state.segmented_data:
             window = st.slider("Savitzky-Golay Window Length", 5, 51, 15, step=2)
             poly = st.slider("Polynomial Order", 2, 5, 2)
             use_step = st.checkbox("Display as Step Line (Smoothed)", value=False)
+            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
                 smoothed = savgol_filter(obs["data"], window, poly)
-                x_vals = np.arange(len(smoothed))  # Explicit x-axis
+                x_vals = np.arange(len(smoothed))
+                if use_step:
+                    x_vals, smoothed = aggregate_for_step(x_vals, smoothed, step_interval)
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
                     x=x_vals,
                     y=smoothed,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
-                    line=dict(color=color, shape="hv" if use_step else "linear")  # hv = true step
+                    line=dict(color=color, shape="hv" if use_step else "linear")
                 ))
             fig.update_layout(title="Smoothed Signal", xaxis_title="Index", yaxis_title="Signal Value")
             st.plotly_chart(fig, use_container_width=True)
@@ -130,12 +139,15 @@ if st.session_state.segmented_data:
             cutoff = st.slider("Low-pass Cutoff Frequency", 0.01, 0.5, 0.1)
             order = st.slider("Filter Order", 1, 5, 2)
             use_step = st.checkbox("Display as Step Line (Low-pass)", value=False)
+            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
                 b, a = butter(order, cutoff, btype='low', analog=False)
                 filtered = filtfilt(b, a, obs["data"])
                 x_vals = np.arange(len(filtered))
+                if use_step:
+                    x_vals, filtered = aggregate_for_step(x_vals, filtered, step_interval)
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
                     x=x_vals,
@@ -151,15 +163,18 @@ if st.session_state.segmented_data:
         with tabs[3]:
             deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 5)
             use_step = st.checkbox("Display as Step Line (Curve Fit)", value=False)
+            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
                 x = np.arange(len(obs["data"]))
                 coeffs = np.polyfit(x, obs["data"], deg)
                 fitted = np.polyval(coeffs, x)
+                if use_step:
+                    x, fitted = aggregate_for_step(x, fitted, step_interval)
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
-                    x=x,  # Explicit x-axis
+                    x=x,
                     y=fitted,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
@@ -167,8 +182,6 @@ if st.session_state.segmented_data:
                 ))
             fig.update_layout(title="Curve Fit Signal", xaxis_title="Index", yaxis_title="Signal Value")
             st.plotly_chart(fig, use_container_width=True)
-
-
 
         # # --- FFT Band Intensity ---
         # with tabs[4]:
