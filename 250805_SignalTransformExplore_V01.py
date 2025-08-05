@@ -150,7 +150,11 @@ if st.session_state.segmented_data:
 
         # --- FFT Band Intensity ---
         with tabs[4]:
-            band_low, band_high = st.slider("Frequency Band (Hz)", 0.0, 0.5, (0.05, 0.15))
+            band_low, band_high = st.slider("Frequency Band (Hz)", 
+                                            min_value=0, 
+                                            max_value=1000, 
+                                            value=(50, 150), 
+                                            step=50)
             fig = go.Figure()
             for obs in st.session_state.observations:
                 fft_vals = np.fft.rfft(obs["data"])
