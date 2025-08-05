@@ -181,30 +181,40 @@ if st.session_state.segmented_data:
         #     fig.update_layout(title="FFT Band Intensity", xaxis_title="Signal", yaxis_title="Intensity")
         #     st.plotly_chart(fig, use_container_width=True)
 
-        # --- FFT Spectrum Plot ---
+        # --- FFT Spectrum (Zoomed to Selected Band) ---
         with tabs[4]:
             sampling_rate = st.number_input("Sampling Rate (Hz)", value=2000, min_value=1)
-            band_low, band_high = st.slider("Highlight Frequency Band (Hz)", 
-                                            min_value=0, max_value=1000, value=(50, 150), step=50)
+        
+            # Frequency band slider (0-1000Hz in 50Hz steps)
+            band_low, band_high = st.slider("Frequency Band (Hz)",
+                                            min_value=0,
+                                            max_value=1000,
+                                            value=(50, 150),
+                                            step=50)
         
             fig = go.Figure()
+        
             for obs in st.session_state.observations:
                 fft_vals = np.fft.rfft(obs["data"])
                 freqs = np.fft.rfftfreq(len(obs["data"]), d=1.0/sampling_rate)
                 magnitude = np.abs(fft_vals)
         
+                # Filter to zoom only the selected frequency band
+                mask = (freqs >= band_low) & (freqs <= band_high)
+                freqs_zoom = freqs[mask]
+                magnitude_zoom = magnitude[mask]
+        
                 color = "green" if obs["status"] == "OK" else "red"
-                fig.add_trace(go.Scatter(x=freqs, y=magnitude,
+                fig.add_trace(go.Scatter(x=freqs_zoom, y=magnitude_zoom,
                                          mode="lines",
                                          name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
                                          line=dict(color=color)))
         
-                # Highlight selected frequency band
-                band_mask = (freqs >= band_low) & (freqs <= band_high)
-                fig.add_trace(go.Scatter(x=freqs[band_mask], y=magnitude[band_mask],
-                                         mode="lines",
-                                         line=dict(color="yellow", width=4),
-                                         name=f"Highlighted Band ({band_low}-{band_high} Hz)",
-                                         showlegend=False))
-            fig.update_layout(title="FFT Spectrum", xaxis_title="Frequency (Hz)", yaxis_title="Magnitude")
+            # Update layout for zoomed view
+            fig.update_layout(
+                title=f"FFT Spectrum (Zoomed {band_low}-{band_high} Hz)",
+                xaxis_title="Frequency (Hz)",
+                yaxis_title="Magnitude",
+                xaxis=dict(range=[band_low, band_high])
+            )
             st.plotly_chart(fig, use_container_width=True)
