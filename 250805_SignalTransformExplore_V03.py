@@ -265,9 +265,9 @@ if st.session_state.segmented_data:
         with tabs[5]:
             st.subheader("Signal Intensity (dB) Over Time")
             
-            sampling_rate = st.number_input("Sampling Rate (Hz) - Intensity", value=2000, min_value=1)
-            band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (50, 150), step=50)
-            window_size = st.slider("Window Size (ms) - Intensity", 10, 500, 50)  # sliding FFT window
+            sampling_rate = st.number_input("Sampling Rate (Hz) - Intensity", value=10000, min_value=1)
+            band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (50, 150), step=10)
+            window_size = st.slider("Window Size (ms) - Intensity", 1, 500, 50)  # sliding FFT window
             overlap = st.slider("Window Overlap (%) - Intensity", 0, 90, 50)
         
             fig = go.Figure()
