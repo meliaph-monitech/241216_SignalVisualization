@@ -268,7 +268,7 @@ if st.session_state.segmented_data:
             sampling_rate = st.number_input("Sampling Rate (Hz) - Intensity", value=10000, min_value=1)
             band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (50, 150), step=10)
             window_size = st.slider("Window Size (ms) - Intensity", 1, 500, 50)  # sliding FFT window
-            overlap = st.slider("Window Overlap (%) - Intensity", 0, 90, 50)
+            overlap = st.slider("Window Overlap (%) - Intensity", 0, 99, 99)
         
             fig = go.Figure()
         
