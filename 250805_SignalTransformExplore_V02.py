@@ -115,7 +115,7 @@ if st.session_state.segmented_data:
             window = st.slider("Savitzky-Golay Window Length", 5, 51, 15, step=2)
             poly = st.slider("Polynomial Order", 2, 5, 2)
             use_step = st.checkbox("Display as Step Line (Smoothed)", value=False)
-            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
+            step_interval = st.slider("Step Interval (points) - Smoothed", 10, 500, 50) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
@@ -139,7 +139,7 @@ if st.session_state.segmented_data:
             cutoff = st.slider("Low-pass Cutoff Frequency", 0.01, 0.5, 0.1)
             order = st.slider("Filter Order", 1, 5, 2)
             use_step = st.checkbox("Display as Step Line (Low-pass)", value=False)
-            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
+            step_interval = st.slider("Step Interval (points) - Low-pass", 10, 500, 50) if use_step else None
         
             fig = go.Figure()
             for obs in st.session_state.observations:
@@ -163,8 +163,8 @@ if st.session_state.segmented_data:
         with tabs[3]:
             deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 5)
             use_step = st.checkbox("Display as Step Line (Curve Fit)", value=False)
-            step_interval = st.slider("Step Interval (points)", 10, 500, 50) if use_step else None
-        
+            step_interval = st.slider("Step Interval (points) - Curve Fit", 10, 500, 50) if use_step else None
+
             fig = go.Figure()
             for obs in st.session_state.observations:
                 x = np.arange(len(obs["data"]))
