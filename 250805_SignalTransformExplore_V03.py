@@ -266,7 +266,15 @@ if st.session_state.segmented_data:
             st.subheader("Signal Intensity (dB) Over Time")
             
             sampling_rate = st.number_input("Sampling Rate (Hz) - Intensity", value=10000, min_value=1)
-            band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (50, 150), step=10)
+        
+            # Checkbox to toggle between band or exact frequency
+            use_exact_freq = st.checkbox("Use Exact Frequency (Hz) Instead of Band")
+        
+            if use_exact_freq:
+                exact_freq = st.number_input("Exact Frequency (Hz)", value=300, min_value=0, max_value=1000, step=50)
+            else:
+                band_low, band_high = st.slider("Frequency Band (Hz) - Intensity", 0, 1000, (130, 170), step=10)
+        
             window_size = st.slider("Window Size (ms) - Intensity", 1, 500, 50)  # sliding FFT window
             overlap = st.slider("Window Overlap (%) - Intensity", 0, 99, 99)
         
@@ -282,8 +290,16 @@ if st.session_state.segmented_data:
                     segment = data[start:start + window_points]
                     fft_vals = np.fft.rfft(segment)
                     freqs = np.fft.rfftfreq(len(segment), d=1.0/sampling_rate)
-                    mask = (freqs >= band_low) & (freqs <= band_high)
-                    band_mag = np.sum(np.abs(fft_vals[mask]))
+        
+                    if use_exact_freq:
+                        # Find closest FFT bin to the exact frequency
+                        idx = (np.abs(freqs - exact_freq)).argmin()
+                        band_mag = np.abs(fft_vals[idx])
+                    else:
+                        # Use frequency band range
+                        mask = (freqs >= band_low) & (freqs <= band_high)
+                        band_mag = np.sum(np.abs(fft_vals[mask]))
+        
                     intensity_db = 20 * np.log10(band_mag + 1e-12)  # avoid log(0)
                     times.append(start / sampling_rate)  # time in seconds
                     intensities.append(intensity_db)
@@ -303,4 +319,3 @@ if st.session_state.segmented_data:
                 yaxis_title="Intensity (dB)"
             )
             st.plotly_chart(fig, use_container_width=True)
-
