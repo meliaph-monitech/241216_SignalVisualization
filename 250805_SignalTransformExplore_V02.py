@@ -108,17 +108,19 @@ if st.session_state.segmented_data:
         with tabs[1]:
             window = st.slider("Savitzky-Golay Window Length", 5, 51, 15, step=2)
             poly = st.slider("Polynomial Order", 2, 5, 2)
-            use_step = st.checkbox("Display as Step/Jump (Smoothed)", value=False)
+            use_step = st.checkbox("Display as Step Line (Smoothed)", value=False)
         
             fig = go.Figure()
             for obs in st.session_state.observations:
                 smoothed = savgol_filter(obs["data"], window, poly)
+                x_vals = np.arange(len(smoothed))  # Explicit x-axis
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
+                    x=x_vals,
                     y=smoothed,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
-                    line=dict(color=color, shape="hv" if use_step else "linear")  # hv = step (pre)
+                    line=dict(color=color, shape="hv" if use_step else "linear")  # hv = true step
                 ))
             fig.update_layout(title="Smoothed Signal", xaxis_title="Index", yaxis_title="Signal Value")
             st.plotly_chart(fig, use_container_width=True)
@@ -127,14 +129,16 @@ if st.session_state.segmented_data:
         with tabs[2]:
             cutoff = st.slider("Low-pass Cutoff Frequency", 0.01, 0.5, 0.1)
             order = st.slider("Filter Order", 1, 5, 2)
-            use_step = st.checkbox("Display as Step/Jump (Low-pass)", value=False)
+            use_step = st.checkbox("Display as Step Line (Low-pass)", value=False)
         
             fig = go.Figure()
             for obs in st.session_state.observations:
                 b, a = butter(order, cutoff, btype='low', analog=False)
                 filtered = filtfilt(b, a, obs["data"])
+                x_vals = np.arange(len(filtered))
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
+                    x=x_vals,
                     y=filtered,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
@@ -146,7 +150,7 @@ if st.session_state.segmented_data:
         # --- Curve Fit ---
         with tabs[3]:
             deg = st.slider("Curve Fit Polynomial Degree", 1, 100, 5)
-            use_step = st.checkbox("Display as Step/Jump (Curve Fit)", value=False)
+            use_step = st.checkbox("Display as Step Line (Curve Fit)", value=False)
         
             fig = go.Figure()
             for obs in st.session_state.observations:
@@ -155,6 +159,7 @@ if st.session_state.segmented_data:
                 fitted = np.polyval(coeffs, x)
                 color = "green" if obs["status"] == "OK" else "red"
                 fig.add_trace(go.Scatter(
+                    x=x,  # Explicit x-axis
                     y=fitted,
                     mode="lines",
                     name=f"{obs['csv']} - Bead {obs['bead']} ({obs['status']})",
@@ -162,6 +167,7 @@ if st.session_state.segmented_data:
                 ))
             fig.update_layout(title="Curve Fit Signal", xaxis_title="Index", yaxis_title="Signal Value")
             st.plotly_chart(fig, use_container_width=True)
+
 
 
         # # --- FFT Band Intensity ---
